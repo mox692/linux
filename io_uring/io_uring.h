@@ -59,6 +59,7 @@ struct io_wait_queue {
 static inline bool io_should_wake(struct io_wait_queue *iowq)
 {
 	struct io_ring_ctx *ctx = iowq->ctx;
+	// TODO: こいつは誰が書き込むのか？
 	int dist = READ_ONCE(ctx->rings->cq.tail) - (int) iowq->cq_tail;
 
 	/*

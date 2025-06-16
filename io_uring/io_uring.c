@@ -623,6 +623,7 @@ static void __io_cqring_overflow_flush(struct io_ring_ctx *ctx, bool dying)
 					struct io_overflow_cqe, list);
 
 		if (!dying) {
+			// MEMO: overflowlistから, cqe
 			if (!io_get_cqe_overflow(ctx, &cqe, true))
 				break;
 			memcpy(cqe, &ocqe->cqe, cqe_size);
@@ -648,6 +649,7 @@ static void __io_cqring_overflow_flush(struct io_ring_ctx *ctx, bool dying)
 	}
 
 	if (list_empty(&ctx->cq_overflow_list)) {
+		// MEMO: listがからになったら, IORING_SQ_CQ_OVERFLOWとかをclearする
 		clear_bit(IO_CHECK_CQ_OVERFLOW_BIT, &ctx->check_cq);
 		atomic_andnot(IORING_SQ_CQ_OVERFLOW, &ctx->rings->sq_flags);
 	}
@@ -2519,12 +2521,14 @@ static inline int io_cqring_wait_schedule(struct io_ring_ctx *ctx,
 		return 1;
 	if (unlikely(task_sigpending(current)))
 		return -EINTR;
+	// MEMO: ここで, wakeがあったかどうかをcheckしてそう
 	if (unlikely(io_should_wake(iowq)))
 		return 0;
 
 	return __io_cqring_wait_schedule(ctx, iowq, ext_arg, start_time);
 }
 
+// MEMO: io_uring_enterとかでまちが発生する時のwait処理?
 /*
  * Wait until events become available, if we don't already have some. The
  * application must reap them itself, as they reside on the shared cq ring.
@@ -2604,6 +2608,7 @@ static int io_cqring_wait(struct io_ring_ctx *ctx, int min_events, u32 flags,
 							TASK_INTERRUPTIBLE);
 		}
 
+		// MEMO: イベントが来るまでwait
 		ret = io_cqring_wait_schedule(ctx, &iowq, ext_arg, start_time);
 		__set_current_state(TASK_RUNNING);
 		atomic_set(&ctx->cq_wait_nr, IO_CQ_WAKE_INIT);
@@ -3335,6 +3340,7 @@ uaccess_end:
 #endif
 }
 
+// MEMO: io_uring_enter のエントリ
 SYSCALL_DEFINE6(io_uring_enter, unsigned int, fd, u32, to_submit,
 		u32, min_complete, u32, flags, const void __user *, argp,
 		size_t, argsz)
@@ -3419,9 +3425,11 @@ SYSCALL_DEFINE6(io_uring_enter, unsigned int, fd, u32, to_submit,
 		mutex_unlock(&ctx->uring_lock);
 	}
 
+	// MEMO: io_uring crateの場合, sq_cq_overflow() がtrueの場合, このflagつきで呼ばれる
 	if (flags & IORING_ENTER_GETEVENTS) {
 		int ret2;
 
+		// MEMO: syscall_iopollは多分対象外
 		if (ctx->syscall_iopoll) {
 			/*
 			 * We disallow the app entering submit/complete with
@@ -3438,6 +3446,8 @@ iopoll_locked:
 		} else {
 			struct ext_arg ext_arg = { .argsz = argsz };
 
+			// MEMO: io_get_ext_argは, argpからext_argを取得する
+			//       何秒待つ, みたいな指定がなければ, waitなしになるような気がする(よう確認)
 			ret2 = io_get_ext_arg(ctx, flags, argp, &ext_arg);
 			if (likely(!ret2))
 				ret2 = io_cqring_wait(ctx, min_complete, flags,
